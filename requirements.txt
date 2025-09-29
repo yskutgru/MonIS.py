@@ -1,0 +1,4 @@
+psycopg2-binary==2.9.7
+schedule==1.2.0
+pysnmp==4.4.12
+pyasn1==0.4.8
