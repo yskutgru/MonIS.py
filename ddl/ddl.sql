@@ -13,7 +13,6 @@ CREATE TABLE mon.element_type (
 COMMENT ON TABLE mon.element_type IS 'Types of monitored elements';
 
 
--- mon."handler" definition
 
 -- Drop table
 
@@ -37,7 +36,6 @@ COMMENT ON TABLE mon."handler" IS 'Request handlers/processors';
 CREATE TABLE mon.node (
 	id int4 DEFAULT nextval('mon.seq_node_id'::regclass) NOT NULL,
 	"name" varchar(30) NOT NULL,
-	ipaddress inet NOT NULL,
 	community varchar(100) DEFAULT 'public_cisco'::character varying NULL,
 	rwcommunity varchar(100) NULL,
 	manage bool DEFAULT true NOT NULL,
@@ -543,3 +541,67 @@ JOIN mon.request_group rg ON t.request_group_id = rg.id
 JOIN mon.request_group_ref rgr ON rg.id = rgr.group_id
 JOIN mon.request r ON rgr.request_id = r.id
 WHERE t.name = 'Interface Inventory';
+
+
+-- ======================================================================
+-- Additional DDL extracted from live database: interface inventory, IPs, ARP
+-- These objects are created with IF NOT EXISTS to make the DDL idempotent
+-- ======================================================================
+
+-- Table for interface inventory (per-node, per-ifIndex)
+CREATE TABLE IF NOT EXISTS mon.interface_inventory (
+	id SERIAL PRIMARY KEY,
+	node_id INTEGER NOT NULL REFERENCES mon.node(id) ON DELETE CASCADE,
+	if_index INTEGER NOT NULL,
+	if_name VARCHAR(255),
+	if_descr TEXT,
+	if_type INTEGER,
+	if_mtu INTEGER,
+	if_speed BIGINT,
+	if_phys_address MACADDR,
+	if_admin_status INTEGER,
+	if_oper_status INTEGER,
+	if_last_change BIGINT,
+	if_alias TEXT,
+	discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	status VARCHAR(20) DEFAULT 'ACTIVE',
+	UNIQUE(node_id, if_index)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_interface_inventory_node_ifindex ON mon.interface_inventory(node_id, if_index);
+
+
+-- Table for mapping IP addresses to interfaces on a node
+CREATE TABLE IF NOT EXISTS mon.interface_ip (
+	id SERIAL PRIMARY KEY,
+	node_id INTEGER NOT NULL REFERENCES mon.node(id) ON DELETE CASCADE,
+	if_index INTEGER NOT NULL,
+	ip_address INET NOT NULL,
+	first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	source VARCHAR(50)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_interface_ip_node_ifindex_ip ON mon.interface_ip(node_id, if_index, ip_address);
+
+
+-- ARP table (IP -> MAC learned from IPNetToMedia/arp)
+CREATE TABLE IF NOT EXISTS mon.arp_table (
+	id SERIAL PRIMARY KEY,
+	node_id INTEGER NOT NULL REFERENCES mon.node(id) ON DELETE CASCADE,
+	ip_address INET,
+	mac_address MACADDR NOT NULL,
+	first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	source VARCHAR(50)
+);
+
+-- Seed a few recent ARP rows observed in the live database (idempotent)
+INSERT INTO mon.arp_table (node_id, ip_address, mac_address, first_seen, last_seen, source)
+VALUES
+	(1, '192.168.111.1',  'a8:f9:4b:ab:06:a0', now(), now(), 'arp'),
+	(1, '192.168.111.8',  'f8:f0:82:10:55:d2', now(), now(), 'arp'),
+	(1, '192.168.111.42', '00:08:7c:86:03:80', now(), now(), 'arp'),
+	(1, '192.168.111.44', 'a4:56:30:9e:e3:c1', now(), now(), 'arp'),
+	(1, '192.168.111.45', '00:15:f9:83:60:41', now(), now(), 'arp'),
+	(1, '192.168.111.47', 'f8:f0:82:10:1b:0c', now(), now(), 'arp')
+ON CONFLICT DO NOTHING;

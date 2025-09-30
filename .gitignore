@@ -1,17 +1,53 @@
-# Игнорировать папку виртуального окружения
+# Ignore virtual environment folder
 venv/
 
-# Игнорировать папку temp
+# Ignore temp folder
 temp/
 
-# Игнорировать кеш Python
+# Ignore Python cache
 __pycache__/
 *.pyc
 
-# Игнорировать файлы логов
+# Ignore log files
 *.log
 
-# Игнорировать файлы настроек VS Code (опционально)
+# Local environment file (secrets)
+.env
+
+# Ignore VS Code settings (optional)
 .vscode/
 
-postgres.session.sql
+# PyCharm
+.idea/
+
+# Byte-compiled / optimized / DLL files
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Pyenv
+.python-version
+
+# local logs and runtime files
+*.log
+snmp_monitor.log
+
+# Editor temp files
+*~
+.DS_Store

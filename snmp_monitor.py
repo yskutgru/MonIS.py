@@ -12,7 +12,7 @@ from config import get_db_config, get_monitor_config, DB_CONFIG
 # Добавляем текущую директорию в путь для импорта handlers
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Попробуем импортировать обработчики
+# Try to import handlers
 try:
     from handlers.handler_factory import HandlerFactory
     HANDLERS_AVAILABLE = True
@@ -21,7 +21,7 @@ except ImportError as e:
     print("Проверьте наличие файлов в папке handlers/")
     HANDLERS_AVAILABLE = False
 
-# Настройка логирования
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -48,7 +48,7 @@ class SNMPMonitor:
             sys.exit(1)
 
     def connect_db(self) -> bool:
-        """Подключение к БД с повторными попытками"""
+        """Connect to the DB with retry attempts"""
         max_retries = 3
         for attempt in range(max_retries):
             try:
@@ -63,13 +63,13 @@ class SNMPMonitor:
         return False
 
     def disconnect_db(self):
-        """Отключение от БД"""
+        """Disconnect from the DB"""
         if self.connection:
             self.connection.close()
             logger.info("Отключение от БД")
 
     def get_scheduled_tasks(self) -> List[Dict[str, Any]]:
-        """Получение задач по расписанию из таблицы CRONTAB"""
+        """Retrieve scheduled tasks from the CRONTAB table"""
         query = """
         SELECT ct.id as cron_id, ct.minutes, ct.hours, ct.days,
                ct.startdt, ct.lastdt, ct.status, ct.task_id, ct.agent, ct.j_id,
@@ -106,8 +106,8 @@ class SNMPMonitor:
             return []
 
     def update_crontab_status(self, cron_id: int, status: str, j_id: int = None):
-        """Обновление статуса задачи в CRONTAB"""
-        # Для периодических задач всегда возвращаем статус ACTIVE
+        """Update a crontab task status"""
+        # For periodic tasks, always revert status back to ACTIVE
         if status in ['COMPLETED', 'ERROR']:
             status = 'ACTIVE'
 
@@ -127,88 +127,86 @@ class SNMPMonitor:
             self.connection.rollback()
 
     def should_execute_task(self, cron_task: Dict[str, Any]) -> bool:
-        """Проверка, нужно ли выполнять задачу по расписанию на основе интервала"""
+        """Decide whether a scheduled task should be executed based on interval and timestamps"""
         now = datetime.now()
-        logger.debug(f"Проверка задачи {cron_task['task_name']} в {now}")
+        logger.debug(f"Checking task {cron_task['task_name']} at {now}")
 
-        # Вычисляем общий интервал в минутах
+        # Compute total interval in minutes
         days = cron_task['days'] or 0
         hours = cron_task['hours'] or 0
         minutes = cron_task['minutes'] or 0
         total_interval_minutes = days * 24 * 60 + hours * 60 + minutes
 
-        # Если интервал не задан (все поля NULL или 0), выполняем каждую минуту
+        # If no interval is specified (all fields NULL or 0), run every minute
         if total_interval_minutes == 0:
             total_interval_minutes = 1
-            logger.debug("Интервал не задан, используем 1 минуту по умолчанию")
+            logger.debug("Interval not set, defaulting to 1 minute")
 
-        logger.debug(f"Рассчитанный интервал: {total_interval_minutes} минут "
+        logger.debug(f"Calculated interval: {total_interval_minutes} minutes "
                      f"(days={days}, hours={hours}, minutes={minutes})")
 
-        # Проверка startdt
+        # Check startdt
         if cron_task['startdt']:
             startdt = cron_task['startdt']
-            # Конвертируем в datetime если это строка
+            # Convert to datetime if provided as string
             if isinstance(startdt, str):
                 try:
                     startdt = datetime.fromisoformat(startdt.replace('Z', '+00:00'))
                 except ValueError:
-                    logger.warning(f"Неверный формат startdt: {startdt}")
+                    logger.warning(f"Invalid startdt format: {startdt}")
                     return False
 
             if startdt > now:
-                logger.debug(f"Startdt в будущем: {startdt} > {now}")
+                logger.debug(f"startdt is in the future: {startdt} > {now}")
                 return False
             else:
-                logger.debug(f"Startdt прошел: {startdt} <= {now}")
-                # Используем startdt как точку отсчета
+                logger.debug(f"startdt passed: {startdt} <= {now}")
+                # Use startdt as reference
                 reference_time = startdt
         else:
-            # Если startdt не задан, используем начало текущего дня
+            # If startdt is not provided, use beginning of the current day
             reference_time = datetime(now.year, now.month, now.day)
-            logger.debug(f"Startdt не задан, используем начало дня: {reference_time}")
+            logger.debug(f"startdt not provided, using day start: {reference_time}")
 
-        # Проверка последнего выполнения
+        # Check lastdt
         if cron_task['lastdt']:
             last_run = cron_task['lastdt']
-            # Конвертируем в datetime если это строка
+            # Convert to datetime if provided as string
             if isinstance(last_run, str):
                 try:
                     last_run = datetime.fromisoformat(last_run.replace('Z', '+00:00'))
                 except ValueError:
-                    logger.warning(f"Неверный формат lastdt: {last_run}")
+                    logger.warning(f"Invalid lastdt format: {last_run}")
                     last_run = None
 
             if last_run:
-                # Используем lastdt как точку отсчета, если он есть
+                # Use lastdt as reference time if present
                 reference_time = last_run
-                logger.debug(f"Используем lastdt как точку отсчета: {reference_time}")
+                logger.debug(f"Using lastdt as reference time: {reference_time}")
 
-        # Вычисляем разницу во времени от точки отсчета
+        # Compute time difference from the reference time
         time_diff = now - reference_time
         total_diff_minutes = time_diff.total_seconds() / 60
 
-        logger.debug(f"Разница от точки отсчета: {total_diff_minutes:.2f} минут")
+        logger.debug(f"Time difference from reference: {total_diff_minutes:.2f} minutes")
 
-        # Проверяем, прошло ли достаточно времени с последнего выполнения
+        # Check whether enough time has passed since last execution
         if total_diff_minutes < total_interval_minutes:
-            logger.debug(f"Интервал не прошел: {total_diff_minutes:.2f} < {total_interval_minutes} минут")
+            logger.debug(f"Interval not elapsed: {total_diff_minutes:.2f} < {total_interval_minutes} minutes")
             return False
 
-        # Проверяем, что с последнего выполнения прошло не меньше интервала
-        # и что мы находимся в "окне" выполнения (кратность интервалу)
+        # Verify at least one full interval passed and we're in the execution window
         intervals_passed = total_diff_minutes // total_interval_minutes
         time_since_last_interval = total_diff_minutes % total_interval_minutes
 
-        # Выполняем задачу, если прошло хотя бы один полный интервал
-        # и мы находимся в пределах 1 минуты от идеального времени выполнения
+        # Execute task if at least one full interval passed and we're within 1 minute of ideal time
         if intervals_passed >= 1 and time_since_last_interval <= 1:
-            logger.info(f"Задача {cron_task['task_name']} должна быть выполнена "
-                        f"(прошло {intervals_passed} интервалов по {total_interval_minutes} минут)")
+            logger.info(f"Task {cron_task['task_name']} should be executed "
+                        f"(passed {intervals_passed} intervals of {total_interval_minutes} minutes)")
             return True
         else:
-            logger.debug(f"Не время выполнения: прошло {intervals_passed} интервалов, "
-                         f"осталось {time_since_last_interval:.2f} минут до следующего")
+            logger.debug(f"Not execution time: passed {intervals_passed} intervals, "
+                         f"{time_since_last_interval:.2f} minutes until next")
             return False
 
     def get_nodes_for_group(self, group_id: int) -> List[Dict[str, Any]]:
@@ -337,7 +335,7 @@ class SNMPMonitor:
                 cursor.execute(query, result)
                 self.connection.commit()
                 logger.debug(
-                    f"Сохранена запись в result: node_id={result['node_id']}, request_id={result['request_id']}")
+                    f"Saved result record: node_id={result['node_id']}, request_id={result['request_id']}")
         except Exception as e:
             logger.error(f"Ошибка сохранения в result: {e}")
             self.connection.rollback()
@@ -367,7 +365,7 @@ class SNMPMonitor:
             with self.connection.cursor() as cursor:
                 cursor.execute(query, params)
                 self.connection.commit()
-                logger.debug(f"Обновлена запись в result данными обработчика")
+                logger.debug("Updated result record with handler data")
         except Exception as e:
             logger.error(f"Ошибка обновления записи в result: {e}")
             self.connection.rollback()
@@ -375,16 +373,16 @@ class SNMPMonitor:
     def process_single_node(self, node: Dict[str, Any], requests: List[Dict[str, Any]],
                             journal_id: int, handler_id: int) -> List[Dict[str, Any]]:
         """Обработка одного узла с предварительным сохранением в result"""
-        results = []
+        results: List[Dict[str, Any]] = []
         node_has_success = False
 
-        # Сначала создаем записи в result для всех запросов
+        # First, create placeholder result records for all requests
         for request in requests:
             base_result = {
                 'node_id': node['id'],
                 'request_id': request['id'],
                 'journal_id': journal_id,
-                'val': 'PENDING',  # Маркер того, что запрос в процессе
+                'val': 'PENDING',  # marker that request is in progress
                 'cval': None,
                 'key': 'pending',
                 'duration': 0,
@@ -393,17 +391,17 @@ class SNMPMonitor:
             }
             self.save_single_result(base_result)
 
-        logger.debug(f"Созданы начальные записи в result для узла {node['name']} ({len(requests)} запросов)")
+        logger.debug(f"Created initial result records for node {node['name']} ({len(requests)} requests)")
 
-        # Теперь выполняем запросы через обработчик
+        # Now execute requests via handler
         for request in requests:
             result = self.process_single_request(node, request, journal_id, handler_id)
             results.append(result)
 
-            if result['err'] is None:
+            if result.get('err') is None:
                 node_has_success = True
 
-        # Обновляем статус узла только если был успешный запрос
+        # Update node SNMP status only if there was at least one successful request
         if node_has_success:
             self.update_node_snmp_status(node['id'])
 

@@ -3,7 +3,7 @@ import subprocess
 import sys
 
 def install_packages():
-    """Установка совместимых версий пакетов"""
+    """Install specific compatible package versions"""
     packages = [
         "psycopg2-binary==2.9.7",
         "pysnmp==4.4.12", 
@@ -14,9 +14,9 @@ def install_packages():
     for package in packages:
         try:
             subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-            print(f"Успешно установлен: {package}")
+            print(f"Successfully installed: {package}")
         except subprocess.CalledProcessError as e:
-            print(f"Ошибка установки {package}: {e}")
+            print(f"Error installing {package}: {e}")
 
 if __name__ == "__main__":
     install_packages()

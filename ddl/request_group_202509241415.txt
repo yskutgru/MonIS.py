@@ -1,4 +1,0 @@
-|id |name                    |type_id|handler_id|description                        |tag|sort|manage|
-|---|------------------------|-------|----------|-----------------------------------|---|----|------|
-|1  |Standard SNMP Monitoring|1      |1         |Basic system information collection|   |    |true  |
-|2  |MAC Address Collection  |1      |2         |MAC addresses from switches        |   |    |true  |

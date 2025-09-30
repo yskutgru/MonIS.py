@@ -10,10 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 class MacAddressHandler(BaseHandler):
-    """Упрощенный обработчик MAC-адресов"""
+    """Simplified MAC address handler"""
 
     def execute(self, node: Dict[str, Any], request: Dict[str, Any], journal_id: int) -> Dict[str, Any]:
-        """Прямой вызов с упрощенной логикой"""
+        """Direct call with simplified logic"""
         start_time = time.time()
 
         try:
@@ -52,11 +52,11 @@ class MacAddressHandler(BaseHandler):
 
     def process_raw_data(self, node: Dict[str, Any], request: Dict[str, Any],
                          journal_id: int, raw_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Упрощенная обработка сырых данных"""
+        """Simplified processing of raw data"""
         start_time = time.time()
 
         try:
-            # Анализируем сырые данные
+            # Analyze raw data
             mac_data = self.analyze_raw_mac_data(raw_data)
 
             # Сохраняем в таблицу mac_addresses
@@ -90,7 +90,7 @@ class MacAddressHandler(BaseHandler):
             }
 
     def analyze_raw_mac_data(self, raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Анализ сырых данных MAC-адресов"""
+        """Analyze raw MAC address data"""
         mac_addresses = []
 
         for raw_result in raw_data:
@@ -101,9 +101,9 @@ class MacAddressHandler(BaseHandler):
                 if not val or raw_result.get('err'):
                     continue
 
-                logger.debug(f"Анализ данных: key={key}, val_len={len(str(val))}")
+                logger.debug(f"Analyzing data: key={key}, val_len={len(str(val))}")
 
-                # Парсим MAC-адреса в зависимости от типа данных
+                # Parse MAC addresses depending on data type
                 if 'bridge' in key.lower() or '1.3.6.1.2.1.17' in key or 'dot1d' in key.lower():
                     logger.debug(f"Обработка Bridge MIB данных: {key}")
                     macs = self.parse_bridge_mac_data(val)
@@ -122,11 +122,11 @@ class MacAddressHandler(BaseHandler):
         return mac_addresses
 
     def parse_bridge_mac_data(self, data: str) -> List[Dict[str, Any]]:
-        """Парсинг данных Bridge MIB"""
+        """Parse Bridge MIB data"""
         mac_addresses = []
         
         try:
-            logger.debug(f"Парсинг Bridge MIB данных, длина: {len(data)}")
+            logger.debug(f"Parsing Bridge MIB data, length: {len(data)}")
             if data.startswith('[') or data.startswith('{'):
                 import json
                 walk_data = json.loads(data)
@@ -135,10 +135,10 @@ class MacAddressHandler(BaseHandler):
                 if isinstance(walk_data, list):
                     # Формат [(oid, value), ...]
                     for i, (oid, value) in enumerate(walk_data):
-                        logger.debug(f"Элемент {i}: OID={oid}, Value={value}")
+                        logger.debug(f"Element {i}: OID={oid}, Value={value}")
                         if '17.4.3.1.1' in oid:  # Bridge FDB Address
                             formatted_mac = self.format_mac_address(value)
-                            logger.debug(f"Форматированный MAC: {formatted_mac}")
+                            logger.debug(f"Formatted MAC: {formatted_mac}")
                             if formatted_mac and len(formatted_mac) == 17:  # Проверяем корректность MAC
                                 # Извлекаем порт из OID
                                 port_number = self.extract_port_from_oid(oid)
@@ -148,9 +148,9 @@ class MacAddressHandler(BaseHandler):
                                     'ip_address': None,
                                     'port_number': port_number
                                 })
-                                logger.debug(f"Добавлен MAC: {formatted_mac}, порт: {port_number}")
+                                logger.debug(f"Added MAC: {formatted_mac}, port: {port_number}")
             else:
-                logger.debug(f"Данные не в JSON формате: {data[:100]}...")
+                logger.debug(f"Data not in JSON format: {data[:100]}...")
                             
         except Exception as e:
             logger.debug(f"Ошибка парсинга Bridge MIB: {e}")
@@ -159,7 +159,7 @@ class MacAddressHandler(BaseHandler):
         return mac_addresses
 
     def parse_arp_data(self, data: str) -> List[Dict[str, Any]]:
-        """Парсинг данных ARP таблицы"""
+        """Parse ARP table data"""
         mac_addresses = []
         
         try:
@@ -172,7 +172,7 @@ class MacAddressHandler(BaseHandler):
                     for oid, value in walk_data:
                         if '1.3.6.1.2.1.4.22.1.2' in oid:  # ARP MAC Address
                             formatted_mac = self.format_mac_address(value)
-                            if formatted_mac and len(formatted_mac) == 17:  # Проверяем корректность MAC
+                            if formatted_mac and len(formatted_mac) == 17:  # Validate MAC format
                                 ip_address = self.extract_ip_from_oid(oid)
                                 mac_addresses.append({
                                     'mac_address': formatted_mac,
@@ -181,25 +181,25 @@ class MacAddressHandler(BaseHandler):
                                 })
                             
         except Exception as e:
-            logger.debug(f"Ошибка парсинга ARP данных: {e}")
+            logger.debug(f"Error parsing ARP data: {e}")
             
         return mac_addresses
 
     def collect_mac_addresses(self, node: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Прямой сбор MAC-адресов"""
-        # Упрощенная реализация
+        """Direct collection of MAC addresses (placeholder)"""
+        # Simplified implementation
         return []
 
     def snmp_get_single(self, node: Dict[str, Any], oid: str) -> Any:
-        """Одиночный SNMP запрос"""
-        # Упрощенная реализация
+        """Single SNMP GET request (placeholder)"""
+        # Simplified implementation
         return None
 
     def save_mac_addresses(self, node_id: int, mac_data: List[Dict[str, Any]]):
         """Сохранение MAC-адресов в БД"""
-        logger.info(f"Сохранение {len(mac_data)} MAC-адресов для узла {node_id}")
+        logger.info(f"Saving {len(mac_data)} MAC addresses for node {node_id}")
         if not mac_data:
-            logger.warning("Нет MAC-адресов для сохранения")
+            logger.warning("No MAC addresses to save")
             return
 
         cursor = None
@@ -219,7 +219,7 @@ class MacAddressHandler(BaseHandler):
                 interface_id = None
                 if port_number:
                     interface_id = self.get_interface_id_by_port(node_id, port_number)
-                    logger.debug(f"MAC {mac_entry.get('mac_address')} порт {port_number} -> interface_id {interface_id}")
+                    logger.debug(f"MAC {mac_entry.get('mac_address')} port {port_number} -> interface_id {interface_id}")
                 
                 cursor.execute(insert_query, (
                     node_id,
@@ -235,10 +235,10 @@ class MacAddressHandler(BaseHandler):
                 ))
 
             self.db_connection.commit()
-            logger.info(f"Сохранено MAC-адресов: {len(mac_data)}")
+            logger.info(f"Saved MAC addresses: {len(mac_data)}")
 
         except Exception as e:
-            logger.error(f"Ошибка сохранения MAC-адресов: {e}")
+            logger.error(f"Error saving MAC addresses: {e}")
             if self.db_connection:
                 self.db_connection.rollback()
         finally:

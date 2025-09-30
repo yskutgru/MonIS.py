@@ -20,14 +20,14 @@ class BaseHandler(ABC):
     def process_raw_data(self, node: Dict[str, Any], request: Dict[str, Any],
                          journal_id: int, raw_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Process collected raw data"""
-        # By default return the first result
+        # By default return the first raw result
         if raw_data:
             return raw_data[0]
 
-        # If no raw data is available, fall back to direct execution
+        # If no raw data available, perform the direct execute call
         return self.execute(node, request, journal_id)
 
     @abstractmethod
     def get_name(self) -> str:
-        """Return the handler name"""
+        """Return handler display name"""
         pass

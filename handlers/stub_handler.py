@@ -9,15 +9,15 @@ logger = logging.getLogger(__name__)
 
 
 class StubHandler(BaseHandler):
-    """A handler stub that only logs calls"""
+    """A stub handler that only logs calls"""
 
     def execute(self, node: Dict[str, Any], request: Dict[str, Any], journal_id: int) -> Dict[str, Any]:
         """Stub execution of a request"""
         start_time = time.time()
 
-        logger.info(f"STUB: Request {request['name']} for {node['name']} (OID: {request['oid']})")
+        logger.info(f"STUB: Запрос {request['name']} для {node['name']} (OID: {request['oid']})")
 
-        # Return a stub result
+    # Return a stub result
         return {
             'node_id': node['id'],
             'request_id': request['id'],

@@ -1,5 +1,0 @@
-|id |name      |description|
-|---|----------|-----------|
-|3  |Volumes   |Volumes    |
-|1  |Nodes     |Nodes      |
-|2  |Interfaces|Interfaces |

@@ -1,5 +1,0 @@
-|id |name     |type   |site|description                        |net|id_ok|
-|---|---------|-------|----|-----------------------------------|---|-----|
-|1  |All Nodes|general|    |All monitored nodes                |   |     |
-|2  |Switches |network|    |Network switches for MAC collection|   |     |
-|3  |Routers  |network|    |Network routers                    |   |     |
