@@ -13,3 +13,5 @@ __pycache__/
 
 # Игнорировать файлы настроек VS Code (опционально)
 .vscode/
+
+postgres.session.sql
