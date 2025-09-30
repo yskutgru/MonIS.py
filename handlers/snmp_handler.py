@@ -19,10 +19,10 @@ except ImportError:
 
 
 class SNMPHandler(BaseHandler):
-    """Стандартный SNMP обработчик для сбора сырых данных"""
+    """Standard SNMP handler for raw data collection"""
 
     def execute(self, node: Dict[str, Any], request: Dict[str, Any], journal_id: int) -> Dict[str, Any]:
-        """Выполнение SNMP запроса - ЭТАП 1: Сбор сырых данных"""
+        """Execute SNMP request - STAGE 1: Raw data collection"""
         start_time = time.time()
         error_msg = None
         value = None
@@ -35,7 +35,7 @@ class SNMPHandler(BaseHandler):
                 oid = request['oid']
                 request_name = request.get('name', 'unknown')
 
-                # Определяем тип запроса
+                # Determine request type
                 walk_oids = [
                     '1.3.6.1.2.1.2.2.1',      # Interface MIB
                     '1.3.6.1.2.1.31.1.1',      # Interface Extensions MIB
@@ -45,29 +45,29 @@ class SNMPHandler(BaseHandler):
                 ]
 
                 if any(oid.startswith(walk_oid) for walk_oid in walk_oids):
-                    # WALK запрос
+                    # WALK request
                     walk_results = self.snmp_walk(node, oid)
                     if walk_results:
                         # Сохраняем как JSON строку в val
                         value = json.dumps(walk_results, ensure_ascii=False)
                         key = f"walk_{request_name}"
-                        logger.debug(f"WALK запрос для {oid}: найдено {len(walk_results)} записей")
+                        logger.debug(f"WALK request for {oid}: found {len(walk_results)} entries")
                     else:
-                        error_msg = "WALK запрос не вернул данных"
-                        logger.warning(f"WALK запрос для {oid} не вернул данных")
+                        error_msg = "WALK request returned no data"
+                        logger.warning(f"WALK request for {oid} returned no data")
                 else:
-                    # GET запрос
+                    # GET request
                     value = self.snmp_get(node, oid)
                     if value is None:
-                        error_msg = "GET запрос не удался"
-                        logger.warning(f"GET запрос для {oid} не удался")
+                        error_msg = "GET request failed"
+                        logger.warning(f"GET request for {oid} failed")
                     else:
                         key = f"get_{request_name}"
-                        logger.debug(f"GET запрос для {oid}: значение = {value}")
+                        logger.debug(f"GET request for {oid}: value = {value}")
 
             except Exception as e:
                 error_msg = str(e)
-                logger.error(f"Ошибка выполнения SNMP запроса {request.get('name')} для {node['name']}: {e}")
+                logger.error(f"Error executing SNMP request {request.get('name')} for {node['name']}: {e}")
 
         duration = int((time.time() - start_time) * 1000)
 
@@ -84,7 +84,7 @@ class SNMPHandler(BaseHandler):
         }
 
     def snmp_get(self, node: Dict[str, Any], oid: str) -> Optional[str]:
-        """Выполнение SNMP GET запроса"""
+        """Perform SNMP GET request"""
         if not PYSNAP_AVAILABLE:
             return None
 
@@ -113,12 +113,12 @@ class SNMPHandler(BaseHandler):
                     return self.format_snmp_value(var_bind[1])
 
         except Exception as e:
-            logger.debug(f"Ошибка SNMP GET для {node['name']} OID {oid}: {e}")
+            logger.debug(f"SNMP GET error for {node['name']} OID {oid}: {e}")
 
         return None
 
     def snmp_walk(self, node: Dict[str, Any], oid: str) -> List[Tuple[str, str]]:
-        """Выполнение SNMP WALK запроса"""
+        """Perform SNMP WALK request"""
         results = []
 
         if not PYSNAP_AVAILABLE:
@@ -152,12 +152,12 @@ class SNMPHandler(BaseHandler):
                             results.append((oid_str, str(value)))
 
         except Exception as e:
-            logger.error(f"Ошибка SNMP WALK для {node['name']} OID {oid}: {e}")
+            logger.error(f"SNMP WALK error for {node['name']} OID {oid}: {e}")
 
         return results
 
     def format_snmp_value(self, value) -> Optional[str]:
-        """Форматирование значения SNMP переменной"""
+        """Format SNMP variable value"""
         if value is None:
             return None
 
@@ -170,7 +170,7 @@ class SNMPHandler(BaseHandler):
             else:
                 return str(value).strip()
         except Exception as e:
-            logger.debug(f"Ошибка форматирования SNMP значения: {e}")
+            logger.debug(f"Error formatting SNMP value: {e}")
             return str(value)
 
     def get_name(self) -> str:

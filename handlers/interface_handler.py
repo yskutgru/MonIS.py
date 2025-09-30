@@ -10,10 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 class InterfaceHandler(BaseHandler):
-    """Обработчик интерфейсов для этапа 2"""
+    """Interface handler for stage 2"""
 
     def execute(self, node: Dict[str, Any], request: Dict[str, Any], journal_id: int) -> Dict[str, Any]:
-        """Прямой вызов (для обратной совместимости)"""
+        """Direct call (for backward compatibility)"""
         return {
             'node_id': node['id'],
             'request_id': request['id'],
@@ -27,30 +27,30 @@ class InterfaceHandler(BaseHandler):
 
     def process_raw_data(self, node: Dict[str, Any], request: Dict[str, Any],
                          journal_id: int, raw_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Обработка собранных SNMP данных об интерфейсах - ЭТАП 2"""
+        """Process collected SNMP interface data - STAGE 2"""
         start_time = time.time()
         error_msg = None
         interfaces_discovered = 0
         collected_data = []
 
         try:
-            logger.info(f"Обработка интерфейсов для {node['name']} на основе {len(raw_data)} сырых записей")
+            logger.info(f"Processing interfaces for {node['name']} based on {len(raw_data)} raw records")
 
-            # Анализируем сырые данные
+            # Analyze raw data
             interfaces = self.analyze_raw_interface_data(raw_data)
             interfaces_discovered = len(interfaces)
 
             if interfaces:
                 collected_data = interfaces
                 self.save_interfaces(node['id'], interfaces)
-                logger.info(f"Обнаружено интерфейсов: {interfaces_discovered}")
+                logger.info(f"Interfaces discovered: {interfaces_discovered}")
             else:
-                error_msg = "Не удалось обнаружить интерфейсы в сырых данных"
-                logger.warning(f"{error_msg}. Сырые данные: {[r.get('key') for r in raw_data]}")
+                error_msg = "Failed to discover interfaces in raw data"
+                logger.warning(f"{error_msg}. Raw data: {[r.get('key') for r in raw_data]}")
 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"Ошибка обработки интерфейсов: {e}")
+            logger.error(f"Error processing interfaces: {e}")
             import traceback
             logger.error(traceback.format_exc())
 
@@ -74,7 +74,7 @@ class InterfaceHandler(BaseHandler):
         }
 
     def analyze_raw_interface_data(self, raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Анализ сырых данных для построения информации об интерфейсах"""
+        """Analyze raw data to build interface information"""
         interfaces = {}
 
         for raw_result in raw_data:
@@ -84,36 +84,36 @@ class InterfaceHandler(BaseHandler):
                 err = raw_result.get('err')
 
                 if err:
-                    continue  # Пропускаем записи с ошибками
+                    continue  # Skip records with errors
 
                 if not val:
-                    continue  # Пропускаем пустые значения
+                    continue  # Skip empty values
 
-                # Анализируем в зависимости от типа запроса
+                # Analyze depending on request type
                 if key.startswith('walk_') or 'ifDescr' in key or '1.3.6.1.2.1.2.2.1.2' in key:
-                    # WALK запрос ifDescr - содержит список интерфейсов
+                    # WALK request ifDescr - contains list of interfaces
                     interfaces.update(self.parse_interface_walk_data(val))
 
                 elif key.startswith('get_'):
-                    # GET запрос - отдельные значения интерфейсов
+                    # GET request - individual interface values
                     self.parse_interface_get_data(raw_result, interfaces)
 
             except Exception as e:
-                logger.debug(f"Ошибка анализа сырых данных {raw_result.get('key')}: {e}")
+                logger.debug(f"Error analyzing raw data {raw_result.get('key')}: {e}")
 
         return list(interfaces.values())
 
     def parse_interface_walk_data(self, walk_data: str) -> Dict[int, Dict[str, Any]]:
-        """Парсинг WALK данных интерфейсов"""
+        """Parse interface WALK data"""
         interfaces = {}
 
         try:
-            # Пытаемся распарсить JSON
+            # Try to parse JSON
             if walk_data.startswith('[') or walk_data.startswith('{'):
                 data = json.loads(walk_data)
 
                 if isinstance(data, list):
-                    # Формат [(oid, value), ...]
+                    # Format [(oid, value), ...]
                     for oid, value in data:
                         if_index = self.extract_interface_index(oid)
                         if if_index:
@@ -123,7 +123,7 @@ class InterfaceHandler(BaseHandler):
                             interfaces[if_index]['if_name'] = value
 
                 elif isinstance(data, dict):
-                    # Формат {oid: value, ...}
+                    # Format {oid: value, ...}
                     for oid, value in data.items():
                         if_index = self.extract_interface_index(oid)
                         if if_index:
@@ -133,18 +133,18 @@ class InterfaceHandler(BaseHandler):
                             interfaces[if_index]['if_name'] = value
 
         except json.JSONDecodeError:
-            # Если не JSON, пробуем другие форматы
-            logger.debug("WALK данные не в JSON формате, пробуем текстовый парсинг")
+            # If not JSON, try other formats
+            logger.debug("WALK data is not JSON, trying text parsing")
 
         return interfaces
 
     def parse_interface_get_data(self, raw_result: Dict[str, Any], interfaces: Dict[int, Dict[str, Any]]):
-        """Парсинг GET данных интерфейсов"""
+        """Parse interface GET data"""
         key = raw_result.get('key', '')
         val = raw_result.get('val', '')
         request_id = raw_result.get('request_id')
 
-        # Извлекаем индекс интерфейса из ключа или request_id
+        # Extract interface index from key or request_id
         if_index = self.extract_interface_index_from_key(key) or request_id
 
         if not if_index:
@@ -153,7 +153,7 @@ class InterfaceHandler(BaseHandler):
         if if_index not in interfaces:
             interfaces[if_index] = {'if_index': if_index}
 
-        # Определяем тип данных по ключу
+        # Determine data type by key
         if 'ifDescr' in key or '1.3.6.1.2.1.2.2.1.2' in key:
             interfaces[if_index]['ifDescr'] = val
             interfaces[if_index]['if_name'] = val
@@ -165,7 +165,7 @@ class InterfaceHandler(BaseHandler):
             interfaces[if_index]['ifAdminStatus'] = val
 
     def extract_interface_index(self, oid: str) -> Optional[int]:
-        """Извлечение индекса интерфейса из OID"""
+        """Extract interface index from OID"""
         try:
             parts = oid.split('.')
             if len(parts) > 0:
@@ -178,7 +178,7 @@ class InterfaceHandler(BaseHandler):
         return None
 
     def extract_interface_index_from_key(self, key: str) -> Optional[int]:
-        """Извлечение индекса интерфейса из ключа"""
+        """Extract interface index from key"""
         try:
             # Ищем числа в ключе
             import re
@@ -190,7 +190,7 @@ class InterfaceHandler(BaseHandler):
         return None
 
     def save_interfaces(self, node_id: int, interfaces: List[Dict[str, Any]]):
-        """Сохранение интерфейсов в БД"""
+        """Save interfaces to the database"""
         if not interfaces:
             return
 
@@ -199,7 +199,7 @@ class InterfaceHandler(BaseHandler):
             cursor = self.db_connection.cursor()
             now = datetime.now()
 
-            logger.info(f"Сохранение {len(interfaces)} интерфейсов для узла {node_id}")
+            logger.info(f"Saving {len(interfaces)} interfaces for node {node_id}")
 
             insert_query = """
             INSERT INTO mon.interfaces
@@ -233,13 +233,13 @@ class InterfaceHandler(BaseHandler):
                     ))
                     saved_count += 1
                 except Exception as e:
-                    logger.error(f"Ошибка сохранения интерфейса {interface.get('if_index')}: {e}")
+                    logger.error(f"Error saving interface {interface.get('if_index')}: {e}")
 
             self.db_connection.commit()
-            logger.info(f"Успешно сохранено интерфейсов в БД: {saved_count}/{len(interfaces)}")
+            logger.info(f"Successfully saved interfaces to DB: {saved_count}/{len(interfaces)}")
 
         except Exception as e:
-            logger.error(f"Ошибка сохранения интерфейсов: {e}")
+            logger.error(f"Error saving interfaces: {e}")
             if self.db_connection:
                 self.db_connection.rollback()
         finally:

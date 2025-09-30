@@ -9,15 +9,15 @@ logger = logging.getLogger(__name__)
 
 
 class StubHandler(BaseHandler):
-    """Заглушка обработчика, которая только логирует вызовы"""
+    """A handler stub that only logs calls"""
 
     def execute(self, node: Dict[str, Any], request: Dict[str, Any], journal_id: int) -> Dict[str, Any]:
-        """Заглушка выполнения запроса"""
+        """Stub execution of a request"""
         start_time = time.time()
 
-        logger.info(f"STUB: Запрос {request['name']} для {node['name']} (OID: {request['oid']})")
+        logger.info(f"STUB: Request {request['name']} for {node['name']} (OID: {request['oid']})")
 
-        # Возвращаем заглушечный результат
+        # Return a stub result
         return {
             'node_id': node['id'],
             'request_id': request['id'],
