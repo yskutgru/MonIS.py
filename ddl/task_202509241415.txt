@@ -1,0 +1,4 @@
+|id |node_group_id|request_group_id|name                   |description                                 |
+|---|-------------|----------------|-----------------------|--------------------------------------------|
+|1  |1            |1               |Basic System Monitoring|Regular system information collection       |
+|2  |2            |2               |MAC Address Collection |Regular MAC address collection from switches|

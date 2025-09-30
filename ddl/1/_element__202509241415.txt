@@ -1,0 +1,2 @@
+|id |name|snmp_id|manage|deleted|node_id|element_type_id|description|first_dt|dt |
+|---|----|-------|------|-------|-------|---------------|-----------|--------|---|

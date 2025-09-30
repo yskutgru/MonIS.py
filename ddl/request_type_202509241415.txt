@@ -1,0 +1,6 @@
+|id |name |descr|
+|---|-----|-----|
+|1  |snmp |     |
+|2  |ssh  |     |
+|3  |plsql|     |
+|4  |sql  |     |
