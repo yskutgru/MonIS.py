@@ -227,7 +227,7 @@ class MacTableHandler(BaseHandler):
             now = datetime.now()
 
             cursor.execute('''
-                CREATE TABLE IF NOT EXISTS mon.mac_addresses (
+                CREATE TABLE IF NOT EXISTS mon.net_mac (
                     id BIGSERIAL PRIMARY KEY,
                     node_id integer NOT NULL,
                     interface_id integer,
@@ -257,11 +257,11 @@ class MacTableHandler(BaseHandler):
                 source = mac_entry.get('source', 'bridge_fdb')
                 status = mac_entry.get('status')
 
-                cursor.execute('SELECT id FROM mon.mac_addresses WHERE node_id=%s AND mac_address=%s', (node_id, mac_addr))
+                cursor.execute('SELECT id FROM mon.net_mac WHERE node_id=%s AND mac_address=%s', (node_id, mac_addr))
                 existing = cursor.fetchone()
                 if existing:
                     cursor.execute('''
-                        UPDATE mon.mac_addresses
+                        UPDATE mon.net_mac
                         SET interface_id=%s, ip_address=%s, vlan_id=%s, last_seen=%s,
                             status=%s, port_number=%s, source=%s
                         WHERE id=%s
@@ -277,7 +277,7 @@ class MacTableHandler(BaseHandler):
                     ))
                 else:
                     cursor.execute('''
-                        INSERT INTO mon.mac_addresses
+                        INSERT INTO mon.net_mac
                         (node_id, interface_id, mac_address, ip_address, vlan_id, first_seen, last_seen, status, port_number, source)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ''', (
