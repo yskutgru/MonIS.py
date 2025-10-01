@@ -1,6 +1,8 @@
 # Ignore virtual environment folder
 venv/
 
+.gitignore
+
 # Ignore temp folder
 temp/
 
@@ -28,10 +30,6 @@ __pycache__/
 # Pyenv
 .python-version
 
-# local logs and runtime files
-*.log
-snmp_monitor.log
-
 # Editor temp files
 *~
 .DS_Store
@@ -42,10 +40,6 @@ snmp_monitor.log
 # Backup or temporary files created during editing
 *.new
 *~
-
-# Common virtualenv names
-.venv/
-venv/
 
 # Coverage
 .coverage
