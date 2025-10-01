@@ -11,18 +11,18 @@ from pprint import pprint
 
 try:
     from config import get_db_config
+    cfg = get_db_config()
 except Exception as e:
     print(f"Failed to import config: {e}")
-    sys.exit(2)
-
-cfg = get_db_config()
+    cfg = None
 
 try:
     import psycopg2
     from psycopg2.extras import RealDictCursor
 except Exception as e:
-    print("psycopg2 not installed in the active environment. Install psycopg2-binary in venv.")
-    sys.exit(3)
+    print("psycopg2 not installed in the active environment.")
+    psycopg2 = None
+    RealDictCursor = None
 
 
 SCHEDULES = {
@@ -116,6 +116,9 @@ def ensure_crontab(cur, task_id, minutes=None, hours=None, days=None, agent='ANY
 
 
 def main():
+    if cfg is None or psycopg2 is None:
+        print('Missing configuration or psycopg2; aborting populate tasks.')
+        return
     conn = connect()
     try:
         with conn:

@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """Create interface inventory tables under mon schema if not exists."""
-from config import get_db_config
-import psycopg2
+try:
+    from config import get_db_config
+    cfg = get_db_config()
+except Exception as e:
+    print(f"Failed to import config: {e}")
+    cfg = None
 
-cfg = get_db_config()
+try:
+    import psycopg2
+except Exception:
+    psycopg2 = None
 
 def run():
     dsn = {
@@ -55,4 +62,7 @@ def run():
             print("Interface inventory tables ensured")
 
 if __name__ == '__main__':
-    run()
+    if cfg is None or psycopg2 is None:
+        print('Missing configuration or psycopg2; aborting.')
+    else:
+        run()

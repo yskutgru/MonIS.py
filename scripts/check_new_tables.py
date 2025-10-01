@@ -3,14 +3,18 @@
 from pprint import pprint
 try:
     from config import get_db_config
+    cfg = get_db_config()
 except Exception as e:
+    # Avoid raising on import so tests or other modules can import this file.
     print(f"Failed to import config: {e}")
-    raise
+    cfg = None
 
-cfg = get_db_config()
-
-import psycopg2
-from psycopg2.extras import RealDictCursor
+try:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+except Exception:
+    psycopg2 = None
+    RealDictCursor = None
 
 
 def run():
@@ -66,4 +70,7 @@ def run():
                 print(ref)
 
 if __name__ == '__main__':
-    run()
+    if cfg is None or psycopg2 is None:
+        print('Missing configuration or psycopg2; aborting.')
+    else:
+        run()

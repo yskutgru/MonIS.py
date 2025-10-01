@@ -9,19 +9,19 @@ from pprint import pprint
 
 try:
     from config import get_db_config
+    cfg = get_db_config()
 except Exception as e:
     print(f"Failed to import config.py: {e}")
-    sys.exit(2)
-
-cfg = get_db_config()
+    cfg = None
 
 try:
     import psycopg2
     from psycopg2.extras import RealDictCursor
 except Exception as e:
     print("psycopg2 not installed in the active Python environment.")
-    print("Install it in the project's venv, e.g.:\n  /path/to/venv/bin/python -m pip install psycopg2-binary")
-    sys.exit(3)
+    print("Install it in the project's venv, e.g.: pip install psycopg2-binary")
+    psycopg2 = None
+    RealDictCursor = None
 
 
 def main():
@@ -58,4 +58,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    if cfg is None or psycopg2 is None:
+        print('Missing configuration or psycopg2; aborting list_nodes.')
+    else:
+        main()

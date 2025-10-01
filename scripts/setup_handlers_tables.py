@@ -7,18 +7,18 @@ from pprint import pprint
 import sys
 try:
     from config import get_db_config
+    cfg = get_db_config()
 except Exception as e:
     print(f"Failed to import config.py: {e}")
-    sys.exit(2)
-
-cfg = get_db_config()
+    cfg = None
 
 try:
     import psycopg2
     from psycopg2.extras import RealDictCursor
 except Exception as e:
-    print("psycopg2 not installed in the active environment. Install psycopg2-binary in venv.")
-    sys.exit(3)
+    print("psycopg2 not installed in the active environment.")
+    psycopg2 = None
+    RealDictCursor = None
 
 
 DESIRED_HANDLERS = {
@@ -101,6 +101,9 @@ def update_request_group_mapping(cur, handlers_by_name):
 
 
 def main():
+    if cfg is None or psycopg2 is None:
+        print('Missing configuration or psycopg2; aborting setup.')
+        return
     conn = connect()
     try:
         with conn:

@@ -51,3 +51,20 @@ snmp_monitor.log
 # Editor temp files
 *~
 .DS_Store
+ 
+# Pytest cache
+.pytest_cache/
+
+# Backup or temporary files created during editing
+*.new
+*~
+
+# Common virtualenv names
+.venv/
+venv/
+
+# Coverage
+.coverage
+.coverage.*
+
+.gitignore

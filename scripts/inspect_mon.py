@@ -5,11 +5,12 @@ from pprint import pprint
 
 try:
     from config import get_db_config
+    cfg = get_db_config()
 except Exception as e:
+    # When imported as a module (e.g., during tests or analysis), do not exit the process.
+    # Keep cfg undefined so callers can detect missing DB config and handle gracefully.
     print(f"Failed to import config: {e}")
-    sys.exit(2)
-
-cfg = get_db_config()
+    cfg = None
 
 try:
     import psycopg2
@@ -87,4 +88,8 @@ def run():
 
 
 if __name__ == '__main__':
-    run()
+    # Only run when executed as a script. If config is missing, print and do not crash.
+    if cfg is None:
+        print('DB config not available; aborting.')
+    else:
+        run()

@@ -79,7 +79,7 @@ class SNMPMonitor:
                rg.handler_id as handler_id,
                h.proc as handler_proc, et.name as element_type_name
         FROM mon.crontab ct
-        JOIN mon.task t ON ct.task_id = t.id
+        JOIN mon.task t ON ct.task_id = t.id and t.manage=True
         JOIN mon.node_group ng ON t.node_group_id = ng.id
         JOIN mon.request_group rg ON t.request_group_id = rg.id
         JOIN mon.handler h ON rg.handler_id = h.id
@@ -583,8 +583,9 @@ class SNMPMonitor:
             for node in nodes:
                 node_processed = False
                 
-                # Для MAC Address Handler собираем все сырые данные узла
-                if handler_id == 2:  # MAC Address Handler
+                # For certain handlers (MAC table, Interface Discovery) collect all raw data for the node
+                # include handler_id 5 (MacTableHandler) so it receives all raw walk results for the node
+                if handler_id in (2, 4, 5):  # MAC Address Handler, InterfaceDiscoveryHandler, MacTableHandler
                     all_raw_data = []
                     for request in requests:
                         key = (node['id'], request['id'])

@@ -152,39 +152,39 @@ class ArpHandler(BaseHandler):
         try:
             cursor = self.db_connection.cursor()
             now = datetime.now()
-            insert_query = """
-            INSERT INTO mon.arp_table (node_id, ip_address, mac_address, first_seen, last_seen, source)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """
+            # insert_query = """
+            # INSERT INTO mon.net_arp (node_id, ip_address, mac_address, first_seen, last_seen, source, if_index)
+            # VALUES (%s, %s, %s, %s, %s, %s, %s)
+            # """
             for e in entries:
                 try:
                     # Try safe upsert: check existing row first (avoid relying on ON CONFLICT index)
-                    cursor.execute('SELECT id FROM mon.arp_table WHERE node_id=%s AND ip_address=%s AND mac_address=%s', (node_id, e.get('ip_address'), e.get('mac_address')))
+                    cursor.execute('SELECT id FROM mon.net_arp WHERE node_id=%s AND ip_address=%s AND mac_address=%s', (node_id, e.get('ip_address'), e.get('mac_address')))
                     ex = cursor.fetchone()
                     if ex:
-                        cursor.execute('UPDATE mon.arp_table SET last_seen=%s, source=%s WHERE id=%s', (now, e.get('source', 'arp'), ex[0]))
+                        cursor.execute('UPDATE mon.net_arp SET last_seen=%s, source=%s WHERE id=%s', (now, e.get('source', 'arp'), ex[0]))
                     else:
-                        cursor.execute('INSERT INTO mon.arp_table (node_id, ip_address, mac_address, first_seen, last_seen, source) VALUES (%s, %s, %s, %s, %s, %s)', (node_id, e.get('ip_address'), e.get('mac_address'), now, now, e.get('source', 'arp')))
+                        cursor.execute('INSERT INTO mon.net_arp (node_id, ip_address, mac_address, first_seen, last_seen, source, if_index) VALUES (%s, %s, %s, %s, %s, %s, %s)', (node_id, e.get('ip_address'), e.get('mac_address'), now, now, e.get('source', 'arp'), e.get('if_index')))
                 except Exception as err:
                     self.db_connection.rollback()
                     logger.error(f"Error upserting ARP entry {e}: {err}")
-                # upsert into interface_ip for inventory (no reliable if_index mapping here)
-                try:
-                    # Update existing interface_ip row if present. Only insert a new row if we have a valid if_index.
-                    cur2 = self.db_connection.cursor()
-                    cur2.execute('SELECT id FROM mon.interface_ip WHERE node_id=%s AND ip_address=%s', (node_id, e.get('ip_address')))
-                    exist = cur2.fetchone()
-                    if exist:
-                        cur2.execute('UPDATE mon.interface_ip SET last_seen=%s, source=%s WHERE id=%s', (now, e.get('source', 'arp'), exist[0]))
-                    else:
-                        if e.get('if_index') is not None:
-                            cur2.execute('INSERT INTO mon.interface_ip (node_id, if_index, ip_address, first_seen, last_seen, source) VALUES (%s, %s, %s, %s, %s, %s)', (node_id, e.get('if_index'), e.get('ip_address'), now, now, e.get('source', 'arp')))
-                        else:
-                            logger.debug(f"No if_index available for {e.get('ip_address')}; skipping insert into mon.interface_ip")
-                    cur2.close()
+                # # upsert into interface_ip for inventory (no reliable if_index mapping here)
+                # try:
+                #     # Update existing interface_ip row if present. Only insert a new row if we have a valid if_index.
+                #     cur2 = self.db_connection.cursor()
+                #     cur2.execute('SELECT id FROM mon.interface_ip WHERE node_id=%s AND ip_address=%s', (node_id, e.get('ip_address')))
+                #     exist = cur2.fetchone()
+                #     if exist:
+                #         cur2.execute('UPDATE mon.interface_ip SET last_seen=%s, source=%s WHERE id=%s', (now, e.get('source', 'arp'), exist[0]))
+                #     else:
+                #         if e.get('if_index') is not None:
+                #             cur2.execute('INSERT INTO mon.interface_ip (node_id, if_index, ip_address, first_seen, last_seen, source) VALUES (%s, %s, %s, %s, %s, %s)', (node_id, e.get('if_index'), e.get('ip_address'), now, now, e.get('source', 'arp')))
+                #         else:
+                #             logger.debug(f"No if_index available for {e.get('ip_address')}; skipping insert into mon.interface_ip")
+                #     cur2.close()
                 except Exception as err:
                     self.db_connection.rollback()
-                    logger.error(f"Error upserting interface_ip for {e.get('ip_address')}: {err}")
+                    logger.error(f"Error upserting net_arp for {e.get('ip_address')}: {err}")
             self.db_connection.commit()
         except Exception as ex:
             logger.error(f"Error saving arp entries: {ex}")

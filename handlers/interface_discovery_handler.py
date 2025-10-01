@@ -1,3 +1,4 @@
+#
 import time
 from datetime import datetime
 from typing import Dict, Any, List, Optional
@@ -68,30 +69,122 @@ class InterfaceDiscoveryHandler(BaseHandler):
         }
 
     def analyze_raw_interface_data(self, raw_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        # Check for required SNMP walk keys
-        required_keys = ['raw_walk_ifIndex', 'raw_walk_ifDescr', 'raw_walk_ifType']
-        present_keys = set(r.get('key', '') for r in raw_data)
-        missing_keys = [k for k in required_keys if k not in present_keys]
-        if missing_keys:
-            logger.warning(f"Missing SNMP walk keys for interface discovery: {missing_keys}. Raw keys: {list(present_keys)}")
-            # If at least ifIndex is present, try to parse partial data
-            if 'raw_walk_ifIndex' not in present_keys:
-                return []
-        # Continue with available keys
-        interfaces = {}
+        # Collect parsed walk/get data per key first. This simplifies merging
+        # multiple walk segments that arrive in separate raw records.
+        walk_map = {}
+        get_map = []
+
         for raw_result in raw_data:
-            try:
-                key = raw_result.get('key', '')
-                val = raw_result.get('val', '')
-                err = raw_result.get('err')
-                if err or not val:
+            key = raw_result.get('key', '')
+            val = raw_result.get('val', '')
+            err = raw_result.get('err')
+            if err or not val:
+                continue
+
+            if key.startswith('raw_walk_') or key.startswith('walk_') or '1.3.6.1.2.1.2.2.1.' in key or '1.3.6.1.2.1.31.1.1' in key:
+                try:
+                    parsed = json.loads(val)
+                except Exception:
+                    logger.debug(f"Unable to JSON-decode walk val for key {key}")
                     continue
-                if key.startswith('walk_') or 'ifDescr' in key or '1.3.6.1.2.1.2.2.1.2' in key:
-                    interfaces.update(self.parse_interface_walk_data(val))
-                elif key.startswith('get_'):
-                    self.parse_interface_get_data(raw_result, interfaces)
-            except Exception as e:
-                logger.debug(f"Error analyzing raw data {raw_result.get('key')}: {e}")
+
+                # normalize to list of (oid, value) pairs
+                if isinstance(parsed, dict):
+                    items = list(parsed.items())
+                elif isinstance(parsed, list):
+                    items = parsed
+                else:
+                    items = []
+
+                # store merged list for this key (append if multiple records)
+                if key not in walk_map:
+                    walk_map[key] = []
+                walk_map[key].extend(items)
+
+            elif key.startswith('get_'):
+                # preserve GETs for later
+                get_map.append(raw_result)
+
+        if not walk_map and not get_map:
+            present_keys = set(r.get('key', '') for r in raw_data)
+            logger.warning(f"No interface SNMP walks present for discovery. Raw keys: {list(present_keys)}")
+            return []
+
+        # Now build interface structures by iterating over walk_map
+        interfaces: Dict[int, Dict[str, Any]] = {}
+
+        def set_iface_field(idx: int, field_name: str, value: Any):
+            if idx not in interfaces:
+                interfaces[idx] = {'if_index': idx}
+            interfaces[idx][field_name] = value
+
+        # mapping from walk key substring to logical field name
+        mapping = [
+            (('ifDescr', 'ifName', '1.3.6.1.2.1.2.2.1.2', '1.3.6.1.2.1.31.1.1.1.1'), 'if_name'),
+            (('ifType', '1.3.6.1.2.1.2.2.1.3',), 'if_type'),
+            (('ifMtu', '1.3.6.1.2.1.2.2.1.4',), 'if_mtu'),
+            (('ifSpeed', '1.3.6.1.2.1.2.2.1.5',), 'if_speed'),
+            (('ifPhysAddress', '1.3.6.1.2.1.2.2.1.6',), 'if_phys_address'),
+            (('ifAdminStatus', '1.3.6.1.2.1.2.2.1.7',), 'if_admin_status'),
+            (('ifOperStatus', '1.3.6.1.2.1.2.2.1.8',), 'if_oper_status'),
+            (('ifLastChange', '1.3.6.1.2.1.2.2.1.9',), 'if_last_change'),
+            (('ifAlias', '1.3.6.1.2.1.31.1.1.1.18',), 'if_alias'),
+            (('ifIndex', '1.3.6.1.2.1.2.2.1.1',), 'if_index')
+        ]
+
+        # iterate through each collected walk key and populate fields
+        for raw_key, items in walk_map.items():
+            # determine logical field for this raw_key
+            logical_field = None
+            for subs, fld in mapping:
+                if any(sub in raw_key for sub in subs):
+                    logical_field = fld
+                    break
+
+            # default: skip if unknown
+            if not logical_field:
+                continue
+
+            for oid, v in items:
+                idx = self.extract_interface_index(oid)
+                if not idx:
+                    continue
+
+                # normalize value
+                if isinstance(v, dict) and 'value' in v:
+                    val_norm = v.get('value')
+                else:
+                    val_norm = v
+                if isinstance(val_norm, bytes):
+                    try:
+                        val_norm = val_norm.decode('utf-8', errors='ignore')
+                    except Exception:
+                        val_norm = str(val_norm)
+
+                # convert types for numeric fields
+                if logical_field in ('if_index', 'if_mtu', 'if_speed', 'if_admin_status', 'if_oper_status', 'if_last_change'):
+                    try:
+                        val_norm = int(val_norm)
+                    except Exception:
+                        pass
+
+                # store normalized value under a consistent key naming
+                if logical_field == 'if_name':
+                    set_iface_field(idx, 'if_name', val_norm)
+                    set_iface_field(idx, 'ifDescr', val_norm)
+                    logger.debug(f"Mapped if_name for idx {idx}: {val_norm}")
+                elif logical_field == 'if_alias':
+                    set_iface_field(idx, 'if_alias', val_norm)
+                    logger.debug(f"Mapped if_alias for idx {idx}: {val_norm}")
+                elif logical_field == 'if_index':
+                    set_iface_field(idx, 'if_index', val_norm)
+                else:
+                    set_iface_field(idx, logical_field, val_norm)
+
+        # process GET results (single OID values) to fill missing bits
+        for raw_result in get_map:
+            self.parse_interface_get_data(raw_result, interfaces)
+
         return list(interfaces.values())
 
     def parse_interface_walk_data(self, walk_data: str) -> Dict[int, Dict[str, Any]]:
@@ -107,8 +200,17 @@ class InterfaceDiscoveryHandler(BaseHandler):
                         if if_index:
                             if if_index not in interfaces:
                                 interfaces[if_index] = {'if_index': if_index}
-                            interfaces[if_index]['ifDescr'] = value
-                            interfaces[if_index]['if_name'] = value
+                            # normalize value
+                            val_norm = value
+                            if isinstance(val_norm, dict) and 'value' in val_norm:
+                                val_norm = val_norm.get('value')
+                            if isinstance(val_norm, bytes):
+                                try:
+                                    val_norm = val_norm.decode('utf-8', errors='ignore')
+                                except Exception:
+                                    val_norm = str(val_norm)
+                            interfaces[if_index]['ifDescr'] = val_norm
+                            interfaces[if_index]['if_name'] = val_norm
 
                 elif isinstance(data, dict):
                     for oid, value in data.items():
@@ -116,8 +218,16 @@ class InterfaceDiscoveryHandler(BaseHandler):
                         if if_index:
                             if if_index not in interfaces:
                                 interfaces[if_index] = {'if_index': if_index}
-                            interfaces[if_index]['ifDescr'] = value
-                            interfaces[if_index]['if_name'] = value
+                            val_norm = value
+                            if isinstance(val_norm, dict) and 'value' in val_norm:
+                                val_norm = val_norm.get('value')
+                            if isinstance(val_norm, bytes):
+                                try:
+                                    val_norm = val_norm.decode('utf-8', errors='ignore')
+                                except Exception:
+                                    val_norm = str(val_norm)
+                            interfaces[if_index]['ifDescr'] = val_norm
+                            interfaces[if_index]['if_name'] = val_norm
 
         except Exception:
             logger.debug("WALK data parse error")
@@ -175,7 +285,6 @@ class InterfaceDiscoveryHandler(BaseHandler):
         try:
             cursor = self.db_connection.cursor()
             now = datetime.now()
-
             insert_query = """
             INSERT INTO mon.interfaces
             (node_id, if_index, if_name, if_descr, if_type, if_admin_status, if_oper_status,
@@ -192,44 +301,31 @@ class InterfaceDiscoveryHandler(BaseHandler):
                 status = 'ACTIVE'
             """
 
+            # Prepare bulk upsert rows and execute in chunks to reduce transaction size
+            upsert_sql = '''
+                INSERT INTO mon.interface_inventory
+                (node_id, if_index, if_name, if_descr, if_type, if_mtu, if_speed, if_phys_address,
+                 if_admin_status, if_oper_status, if_last_change, if_alias, discovered_at, last_seen, status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (node_id, if_index) DO UPDATE SET
+                    if_name = EXCLUDED.if_name,
+                    if_descr = EXCLUDED.if_descr,
+                    if_type = EXCLUDED.if_type,
+                    if_mtu = EXCLUDED.if_mtu,
+                    if_speed = EXCLUDED.if_speed,
+                    if_phys_address = EXCLUDED.if_phys_address,
+                    if_admin_status = EXCLUDED.if_admin_status,
+                    if_oper_status = EXCLUDED.if_oper_status,
+                    if_last_change = EXCLUDED.if_last_change,
+                    if_alias = EXCLUDED.if_alias,
+                    last_seen = EXCLUDED.last_seen,
+                    status = EXCLUDED.status
+            '''
+
+            rows = []
             for iface in interfaces:
                 try:
-                    # Upsert into mon.interface_inventory
-                    cur = self.db_connection.cursor()
-                    cur.execute('SELECT id FROM mon.interface_inventory WHERE node_id=%s AND if_index=%s', (node_id, iface['if_index']))
-                    exist = cur.fetchone()
-                    if exist:
-                        cur.execute('UPDATE mon.interface_inventory SET last_seen=%s, status=%s WHERE id=%s', (now, iface.get('status', 'ACTIVE'), exist[0]))
-                    else:
-                        cur.execute('INSERT INTO mon.interface_inventory (node_id, if_index, if_name, if_descr, if_type, if_mtu, if_speed, if_phys_address, if_admin_status, if_oper_status, if_last_change, if_alias, discovered_at, last_seen, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)', (
-                            node_id, iface['if_index'], iface.get('if_name'), iface.get('if_descr'), iface.get('if_type'), iface.get('if_mtu'), iface.get('if_speed'), iface.get('if_phys_address'), iface.get('if_admin_status'), iface.get('if_oper_status'), iface.get('if_last_change'), iface.get('if_alias'), now, now, iface.get('status', 'ACTIVE')))
-                    cur.close()
-                except Exception as err:
-                    # rollback and log, but continue with next interface
-                    self.db_connection.rollback()
-                    logger.error(f"Error upserting interface inventory for {iface.get('if_index')}: {err}")
-
-                # Ensure inventory upsert is consistent (single ON CONFLICT upsert)
-                try:
-                    cursor.execute('''
-                        INSERT INTO mon.interface_inventory
-                        (node_id, if_index, if_name, if_descr, if_type, if_mtu, if_speed, if_phys_address,
-                         if_admin_status, if_oper_status, if_last_change, if_alias, discovered_at, last_seen, status)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                        ON CONFLICT (node_id, if_index) DO UPDATE SET
-                            if_name = EXCLUDED.if_name,
-                            if_descr = EXCLUDED.if_descr,
-                            if_type = EXCLUDED.if_type,
-                            if_mtu = EXCLUDED.if_mtu,
-                            if_speed = EXCLUDED.if_speed,
-                            if_phys_address = EXCLUDED.if_phys_address,
-                            if_admin_status = EXCLUDED.if_admin_status,
-                            if_oper_status = EXCLUDED.if_oper_status,
-                            if_last_change = EXCLUDED.if_last_change,
-                            if_alias = EXCLUDED.if_alias,
-                            last_seen = EXCLUDED.last_seen,
-                            status = EXCLUDED.status
-                    ''', (
+                    rows.append((
                         node_id,
                         iface['if_index'],
                         (iface.get('if_name') or '')[:255],
@@ -247,8 +343,21 @@ class InterfaceDiscoveryHandler(BaseHandler):
                         iface.get('status', 'ACTIVE')
                     ))
                 except Exception as e:
-                    self.db_connection.rollback()
-                    logger.error(f"Error upserting interface inventory for {iface.get('if_index')}: {e}")
+                    logger.error(f"Error preparing interface inventory row for {iface.get('if_index')}: {e}")
+
+            # Execute in chunks
+            chunk_size = 100
+            for i in range(0, len(rows), chunk_size):
+                chunk = rows[i:i+chunk_size]
+                try:
+                    cursor.executemany(upsert_sql, chunk)
+                    self.db_connection.commit()
+                except Exception as e:
+                    logger.error(f"Error upserting interface inventory chunk starting at {i}: {e}")
+                    try:
+                        self.db_connection.rollback()
+                    except Exception:
+                        pass
 
             self.db_connection.commit()
 
