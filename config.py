@@ -5,9 +5,16 @@ from typing import Dict, Any
 # Load .env file if python-dotenv is available. This makes it easy to keep
 # secrets and configuration in a local `.env` file during development.
 try:
-    from dotenv import load_dotenv
-    # Load the .env file located next to this config.py
-    load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
+    # importlib is used to dynamically import python-dotenv so static analyzers
+    # won't require resolving the "dotenv" package at analysis time.
+    import importlib
+
+    if importlib.util.find_spec('dotenv') is not None:
+        dotenv = importlib.import_module('dotenv')
+        load_dotenv = getattr(dotenv, 'load_dotenv', None)
+        # Load the .env file located next to this config.py
+        if callable(load_dotenv):
+            load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 except Exception:
     # If python-dotenv is not installed, environment variables will still be used.
     # We avoid crashing here so the module remains importable in constrained envs.
